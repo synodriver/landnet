@@ -57,8 +57,6 @@ class Service(_BaseService):
         else:
             self._on_shutdown = None
         self._max_size = max_size
-        self._queue = None
-        self._main_task: asyncio.Task = None
         self._pending_tasks: Set[asyncio.Task] = set()
 
         self._loop = None
@@ -85,36 +83,29 @@ class Service(_BaseService):
 
         return inner
 
-    async def _main(self):
-        while True:
-            msg: tuple = await self._queue.get()
+    def put_msg(self, msg):
+        if len(self._pending_tasks) < self._max_size:
             task = _loop.create_task(
                 self._handler(*msg[0], **msg[1])
             )  # todo document about this 调用约定 穿tuple 第一个元素是args 第二个是kw
             self._pending_tasks.add(task)
             task.add_done_callback(self._pending_tasks.discard)
-
-    def put_msg(self, msg):
-        try:
-            _loop.call_soon_threadsafe(self._queue.put_nowait, msg)
-            # self._queue.put_nowait(msg)
-        except asyncio.QueueFull:
-            logger.warning(f"message queue for {self.name} if full")
-            raise
+        else:
+            raise ValueError(f"msg queue for {self.name} is full")
 
     async def startup(self):
-        self._queue = asyncio.Queue(self._max_size)
-        self._main_task: asyncio.Task = _loop.create_task(self._main())
         if self._on_startup is not None:
             await self._on_startup(self)
         logger.info(f"staring up service {self.name}")
 
     async def shutdown(self):
-        self._main_task.cancel()
-        try:
-            await self._main_task
-        except asyncio.CancelledError:
-            pass
+        while self._pending_tasks:
+            task = self._pending_tasks.pop()
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
         if self._on_shutdown is not None:
             await self._on_shutdown(self)
         logger.info(f"shuting down service {self.name}")
