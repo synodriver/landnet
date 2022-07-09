@@ -2,7 +2,7 @@
 Copyright (c) 2008-2021 synodriver <synodriver@gmail.com>
 """
 import asyncio
-from typing import Any, Dict, Optional, Set, Union
+from typing import Any, Awaitable, Callable, Dict, Optional, Set, Union
 from uuid import uuid4
 
 from landnet.log import logger
@@ -31,6 +31,8 @@ class _BaseService:
 
 
 class Service(_BaseService):
+    """基本并发单元"""
+
     def __init__(
         self,
         name,
@@ -70,20 +72,31 @@ class Service(_BaseService):
         return inner
 
     def on_startup(self):
-        def inner(func):
+        """设置启动时的callback"""
+
+        def inner(
+            func: Callable[["Service"], Awaitable[Any]]
+        ) -> Callable[["Service"], Awaitable[Any]]:
             self._on_startup = wrap_sync(func)
             return func
 
         return inner
 
     def on_shutdown(self):
-        def inner(func):
+        """设置关闭时的callback"""
+
+        def inner(
+            func: Callable[["Service"], Awaitable[Any]]
+        ) -> Callable[["Service"], Awaitable[Any]]:
             self._on_shutdown = wrap_sync(func)
             return func
 
         return inner
 
-    def put_msg(self, msg):
+    def put_msg(self, msg: tuple):
+        """
+        :msg: 第一个是args, 第二个是kw
+        """
         if len(self._pending_tasks) < self._max_size:
             task = _loop.create_task(
                 self._handler(*msg[0], **msg[1])
@@ -94,11 +107,13 @@ class Service(_BaseService):
             raise ValueError(f"msg queue for {self.name} is full")
 
     async def startup(self):
+        """启动service 一般由run调用"""
         if self._on_startup is not None:
             await self._on_startup(self)
         logger.info(f"staring up service {self.name}")
 
     async def shutdown(self):
+        """关闭service 一般由run调用"""
         while self._pending_tasks:
             task = self._pending_tasks.pop()
             task.cancel()
@@ -112,10 +127,12 @@ class Service(_BaseService):
 
 
 def get_service(name: str) -> Optional[Service]:
+    """根据名字找一个service"""
     return _all_services.get(name, None)
 
 
 def list_services() -> Dict[str, Service]:
+    """取得全部service对象"""
     return _all_services
 
 
@@ -152,6 +169,7 @@ async def call(name: Union[Service, str], *args, **kwargs):
 
 
 def reply(uuid: int, msg: Any, err: Any = None) -> None:
+    """消息送达即可"""
     future = _pending_calls.get(uuid, None)
     if future is None:
         raise ValueError("no such call")
