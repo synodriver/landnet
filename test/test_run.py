@@ -1,5 +1,9 @@
 import asyncio
 import signal
+import sys
+
+sys.path.append(".")
+
 
 loop = asyncio.get_event_loop()
 
@@ -17,12 +21,12 @@ async def _(ping: int, uuid: int = None):
     await asyncio.sleep(1)
     if uuid is None:
         print(f"I am ping and sending {ping + 1}")
-        send("pong", ping + 1)
+        await send("pong", ping + 1)
         return
     else:
         print(f"I am ping and sending reply {ping + 1}")
         reply(uuid, ping + 1)
-        send("pong", ping + 1)
+        await send("pong", ping + 1)
 
 
 s2 = Service("pong")

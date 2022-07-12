@@ -3,7 +3,8 @@ Copyright (c) 2008-2021 synodriver <synodriver@gmail.com>
 """
 import asyncio
 
-from landnet.service import Service, call, get_service, init, list_services, reply, send
+from landnet.service import (Service, call, get_service, init, list_services,
+                             reply, send)
 
 
 async def run(shutdown_waiter=None, startup_complete: asyncio.Future = None):
